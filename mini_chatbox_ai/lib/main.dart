@@ -26,7 +26,7 @@ class VibeSyncApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Music Player 4',
+      title: 'Music Player 3',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF36453F),
@@ -552,6 +552,38 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
               },
             ),
             title: Text(_activePlaylistName!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.play_arrow, color: Colors.white70),
+                  onPressed: () {
+                    if (tracks.isNotEmpty) {
+                      setState(() {
+                        _playlist = List<String>.from(tracks);
+                        _currentTrackIndex = 0;
+                      });
+                      _loadAndPlay(0);
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.shuffle, color: Colors.white70),
+                  onPressed: () {
+                    if (tracks.isNotEmpty) {
+                      final shuffled = List<String>.from(tracks)..shuffle(math.Random());
+                      setState(() {
+                        _playlist = shuffled;
+                        _currentTrackIndex = 0;
+                      });
+                      _loadAndPlay(0);
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
           if (tracks.isEmpty)
             const Expanded(
@@ -626,15 +658,49 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                   leading: const Icon(Icons.playlist_play, color: Color(0xFFB5A296)),
                   title: Text(key, style: const TextStyle(color: Colors.white)),
                   subtitle: Text('$count tracks', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: () {
-                      setState(() {
-                        _customPlaylists.remove(key);
-                        _savePlaylists();
-                      });
-                      setModalState(() {});
-                    },
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.play_arrow, color: Colors.white70),
+                        onPressed: () {
+                          final tracks = _customPlaylists[key];
+                          if (tracks != null && tracks.isNotEmpty) {
+                            setState(() {
+                              _playlist = List<String>.from(tracks);
+                              _currentTrackIndex = 0;
+                            });
+                            _loadAndPlay(0);
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.shuffle, color: Colors.white70),
+                        onPressed: () {
+                          final tracks = _customPlaylists[key];
+                          if (tracks != null && tracks.isNotEmpty) {
+                            final shuffled = List<String>.from(tracks)..shuffle(math.Random());
+                            setState(() {
+                              _playlist = shuffled;
+                              _currentTrackIndex = 0;
+                            });
+                            _loadAndPlay(0);
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.redAccent),
+                        onPressed: () {
+                          setState(() {
+                            _customPlaylists.remove(key);
+                            _savePlaylists();
+                          });
+                          setModalState(() {});
+                        },
+                      ),
+                    ],
                   ),
                   onTap: () {
                     setModalState(() {
@@ -1679,49 +1745,54 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
 
   Widget _build10BandsControls(StateSetter setSheetState) {
     final labels = ['31Hz', '62Hz', '125Hz', '250Hz', '500Hz', '1kHz', '2kHz', '4kHz', '8kHz', '16kHz'];
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(10, (index) {
-        return Column(
-          children: [
-            Text(
-              '${_eq10Bands[index].round()}',
-              style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            Expanded(
-              child: RotatedBox(
-                quarterTurns: 3,
-                child: SliderTheme(
-                  data: SliderThemeData(
-                    activeTrackColor: const Color(0xFF698075),
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: const Color(0xFFB5A296),
-                    trackHeight: 1.5,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                  ),
-                  child: Slider(
-                    value: _eq10Bands[index],
-                    min: -12.0,
-                    max: 12.0,
-                    onChanged: (val) {
-                      setSheetState(() {
-                        _eq10Bands[index] = val;
-                        _eqPreset = 'Custom';
-                      });
-                      setState(() {});
-                      _player?.setEqBand(index, val);
-                    },
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(10, (index) {
+          return SizedBox(
+            width: 48,
+            child: Column(
+              children: [
+                Text(
+                  '${_eq10Bands[index].round()}',
+                  style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                Expanded(
+                  child: RotatedBox(
+                    quarterTurns: 3,
+                    child: SliderTheme(
+                      data: SliderThemeData(
+                        activeTrackColor: const Color(0xFF698075),
+                        inactiveTrackColor: Colors.white24,
+                        thumbColor: const Color(0xFFB5A296),
+                        trackHeight: 1.5,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                      ),
+                      child: Slider(
+                        value: _eq10Bands[index],
+                        min: -12.0,
+                        max: 12.0,
+                        onChanged: (val) {
+                          setSheetState(() {
+                            _eq10Bands[index] = val;
+                            _eqPreset = 'Custom';
+                          });
+                          setState(() {});
+                          _player?.setEqBand(index, val);
+                        },
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                Text(
+                  labels[index],
+                  style: const TextStyle(fontSize: 8, color: Colors.white70, fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
-            Text(
-              labels[index],
-              style: const TextStyle(fontSize: 8, color: Colors.white70, fontWeight: FontWeight.w600),
-            ),
-          ],
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 
@@ -2079,10 +2150,38 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                     _player?.setStereoExpansion(val ? 180.0 : 100.0);
                   },
                 ),
+                const SizedBox(height: 12),
+                _buildSettingsHeader('About'),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F3F1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Music Player 3',
+                        style: TextStyle(color: Color(0xFF1E2824), fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'This application was built within 12 hours with the help of a fully functional IDE called Antigravity by me [Kaji]. Make sure to use it.',
+                        style: TextStyle(color: Color(0xFF698075), fontSize: 12, height: 1.4),
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        'Developed with Flutter and Rust Audio Engine.',
+                        style: TextStyle(color: Colors.grey, fontSize: 11, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 20),
                 const Center(
                   child: Text(
-                    'Music Player 4 v1.0.0',
+                    'Music Player 3 v1.0.0',
                     style: TextStyle(color: Colors.grey, fontSize: 11),
                   ),
                 ),
@@ -2153,24 +2252,29 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
         color: const Color(0xFFF0F3F1),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: const TextStyle(color: Color(0xFF1E2824), fontSize: 14, fontWeight: FontWeight.w600)),
-          DropdownButton<String>(
-            value: value,
-            underline: const SizedBox(),
-            dropdownColor: Colors.white,
-            style: const TextStyle(color: Color(0xFF1E2824), fontSize: 13, fontWeight: FontWeight.bold),
-            items: items.map((String val) {
-              return DropdownMenuItem<String>(
-                value: val,
-                child: Text(val),
-              );
-            }).toList(),
-            onChanged: onChanged,
-          ),
-        ],
+      child: SizedBox(
+        width: double.infinity,
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 4,
+          children: [
+            Text(title, style: const TextStyle(color: Color(0xFF1E2824), fontSize: 14, fontWeight: FontWeight.w600)),
+            DropdownButton<String>(
+              value: value,
+              underline: const SizedBox(),
+              dropdownColor: Colors.white,
+              style: const TextStyle(color: Color(0xFF1E2824), fontSize: 13, fontWeight: FontWeight.bold),
+              items: items.map((String val) {
+                return DropdownMenuItem<String>(
+                  value: val,
+                  child: Text(val),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2557,14 +2661,14 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                             },
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: List.generate(35, (index) {
                                 final isActive = _durationMs > 0 && (_positionMs / _durationMs * 35) > index;
                                 return Container(
                                   width: 2,
                                   height: _waveHeights[index],
                                   decoration: BoxDecoration(
-                                    color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
+                                    color: isActive ? Colors.black : Colors.black.withOpacity(0.4),
                                     borderRadius: BorderRadius.circular(1),
                                   ),
                                 );
