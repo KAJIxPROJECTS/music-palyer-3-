@@ -18,12 +18,17 @@ if (Test-Path "music_player_4") {
 Write-Host "=== 2. Syncing dynamic library DLL ===" -ForegroundColor Cyan
 Copy-Item "rust_audio_engine/target/release/rust_audio_engine.dll" "$AppFolder/" -Force
 
-# Ensure the build output release directory exists and copy DLL there too
 $ReleaseDir = "$AppFolder/build/windows/x64/runner/Release"
 if (!(Test-Path $ReleaseDir)) {
     New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 }
 Copy-Item "rust_audio_engine/target/release/rust_audio_engine.dll" "$ReleaseDir/" -Force
+
+$DebugDir = "$AppFolder/build/windows/x64/runner/Debug"
+if (!(Test-Path $DebugDir)) {
+    New-Item -ItemType Directory -Path $DebugDir -Force | Out-Null
+}
+Copy-Item "rust_audio_engine/target/release/rust_audio_engine.dll" "$DebugDir/" -Force
 
 # 4. Start Flutter Application
 Write-Host "=== 3. Launching Flutter Application ===" -ForegroundColor Cyan

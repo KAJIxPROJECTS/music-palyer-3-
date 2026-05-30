@@ -42,6 +42,33 @@ typedef PlayerGetDeviceSampleRateDart = int Function();
 typedef PlayerGetDeviceChannelsC = ffi.Int32 Function();
 typedef PlayerGetDeviceChannelsDart = int Function();
 
+typedef PlayerSetPreampC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef PlayerSetPreampDart = void Function(ffi.Pointer<ffi.Void>, double);
+
+typedef PlayerSetEqBandC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Int32, ffi.Float);
+typedef PlayerSetEqBandDart = void Function(ffi.Pointer<ffi.Void>, int, double);
+
+typedef PlayerSetStereoExpansionC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef PlayerSetStereoExpansionDart = void Function(ffi.Pointer<ffi.Void>, double);
+
+typedef PlayerSetStereoPanC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef PlayerSetStereoPanDart = void Function(ffi.Pointer<ffi.Void>, double);
+
+typedef PlayerSetReverbRoomSizeC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef PlayerSetReverbRoomSizeDart = void Function(ffi.Pointer<ffi.Void>, double);
+
+typedef PlayerSetReverbMixC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef PlayerSetReverbMixDart = void Function(ffi.Pointer<ffi.Void>, double);
+
+typedef PlayerSetLimiterEnabledC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Bool);
+typedef PlayerSetLimiterEnabledDart = void Function(ffi.Pointer<ffi.Void>, bool);
+
+typedef PlayerSetLimiterThresholdC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef PlayerSetLimiterThresholdDart = void Function(ffi.Pointer<ffi.Void>, double);
+
+typedef PlayerSetLimiterRatioC = ffi.Void Function(ffi.Pointer<ffi.Void>, ffi.Float);
+typedef PlayerSetLimiterRatioDart = void Function(ffi.Pointer<ffi.Void>, double);
+
 class RustAudioPlayer {
   late final ffi.DynamicLibrary _lib;
   ffi.Pointer<ffi.Void>? _playerPtr;
@@ -60,6 +87,16 @@ class RustAudioPlayer {
   late final PlayerGetDeviceNameDart _playerGetDeviceName;
   late final PlayerGetDeviceSampleRateDart _playerGetDeviceSampleRate;
   late final PlayerGetDeviceChannelsDart _playerGetDeviceChannels;
+
+  late final PlayerSetPreampDart _playerSetPreamp;
+  late final PlayerSetEqBandDart _playerSetEqBand;
+  late final PlayerSetStereoExpansionDart _playerSetStereoExpansion;
+  late final PlayerSetStereoPanDart _playerSetStereoPan;
+  late final PlayerSetReverbRoomSizeDart _playerSetReverbRoomSize;
+  late final PlayerSetReverbMixDart _playerSetReverbMix;
+  late final PlayerSetLimiterEnabledDart _playerSetLimiterEnabled;
+  late final PlayerSetLimiterThresholdDart _playerSetLimiterThreshold;
+  late final PlayerSetLimiterRatioDart _playerSetLimiterRatio;
 
   RustAudioPlayer() {
     _loadLibrary();
@@ -153,6 +190,34 @@ class RustAudioPlayer {
     _playerGetDeviceChannels = _lib
         .lookup<ffi.NativeFunction<PlayerGetDeviceChannelsC>>('player_get_device_channels')
         .asFunction<PlayerGetDeviceChannelsDart>();
+
+    _playerSetPreamp = _lib
+        .lookup<ffi.NativeFunction<PlayerSetPreampC>>('player_set_preamp')
+        .asFunction<PlayerSetPreampDart>();
+    _playerSetEqBand = _lib
+        .lookup<ffi.NativeFunction<PlayerSetEqBandC>>('player_set_eq_band')
+        .asFunction<PlayerSetEqBandDart>();
+    _playerSetStereoExpansion = _lib
+        .lookup<ffi.NativeFunction<PlayerSetStereoExpansionC>>('player_set_stereo_expansion')
+        .asFunction<PlayerSetStereoExpansionDart>();
+    _playerSetStereoPan = _lib
+        .lookup<ffi.NativeFunction<PlayerSetStereoPanC>>('player_set_stereo_pan')
+        .asFunction<PlayerSetStereoPanDart>();
+    _playerSetReverbRoomSize = _lib
+        .lookup<ffi.NativeFunction<PlayerSetReverbRoomSizeC>>('player_set_reverb_room_size')
+        .asFunction<PlayerSetReverbRoomSizeDart>();
+    _playerSetReverbMix = _lib
+        .lookup<ffi.NativeFunction<PlayerSetReverbMixC>>('player_set_reverb_mix')
+        .asFunction<PlayerSetReverbMixDart>();
+    _playerSetLimiterEnabled = _lib
+        .lookup<ffi.NativeFunction<PlayerSetLimiterEnabledC>>('player_set_limiter_enabled')
+        .asFunction<PlayerSetLimiterEnabledDart>();
+    _playerSetLimiterThreshold = _lib
+        .lookup<ffi.NativeFunction<PlayerSetLimiterThresholdC>>('player_set_limiter_threshold')
+        .asFunction<PlayerSetLimiterThresholdDart>();
+    _playerSetLimiterRatio = _lib
+        .lookup<ffi.NativeFunction<PlayerSetLimiterRatioC>>('player_set_limiter_ratio')
+        .asFunction<PlayerSetLimiterRatioDart>();
   }
 
   void dispose() {
@@ -238,5 +303,50 @@ class RustAudioPlayer {
     } catch (_) {
       return 2;
     }
+  }
+
+  void setPreamp(double db) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetPreamp(ptr, db);
+  }
+
+  void setEqBand(int bandIdx, double db) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetEqBand(ptr, bandIdx, db);
+  }
+
+  void setStereoExpansion(double percent) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetStereoExpansion(ptr, percent);
+  }
+
+  void setStereoPan(double pan) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetStereoPan(ptr, pan);
+  }
+
+  void setReverbRoomSize(double percent) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetReverbRoomSize(ptr, percent);
+  }
+
+  void setReverbMix(double percent) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetReverbMix(ptr, percent);
+  }
+
+  void setLimiterEnabled(bool enabled) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetLimiterEnabled(ptr, enabled);
+  }
+
+  void setLimiterThreshold(double db) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetLimiterThreshold(ptr, db);
+  }
+
+  void setLimiterRatio(double ratio) {
+    final ptr = _playerPtr;
+    if (ptr != null) _playerSetLimiterRatio(ptr, ratio);
   }
 }

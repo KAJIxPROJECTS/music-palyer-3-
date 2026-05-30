@@ -33,7 +33,8 @@ class TinyBertClassifier {
       try {
         OrtEnv.instance.init();
         final options = OrtSessionOptions();
-        _session = OrtSession.fromFile(file, options);
+        final bytes = await file.readAsBytes();
+        _session = OrtSession.fromBuffer(bytes, options);
         _initialized = true;
       } catch (_) {}
     }

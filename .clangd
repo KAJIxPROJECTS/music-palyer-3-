@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - "-Imini_chatbox_ai/windows"
+    - "-Imini_chatbox_ai/windows/flutter/ephemeral/cpp_client_wrapper/include"
+    - "-Imini_chatbox_ai/windows/flutter/ephemeral"
+    - "-std=c++17"
+    - "-fms-compatibility"
+    - "-fms-extensions"
