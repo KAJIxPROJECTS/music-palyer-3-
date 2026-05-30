@@ -1,0 +1,13 @@
+[package]
+name = "rust_audio_engine"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+cpal = "0.15"
+symphonia = { version = "0.5.4", features = ["all"] }
+ringbuf = "0.4"
+ort = "2.0.0-rc.12"

@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "name": "Win32",
+      "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/mini_chatbox_ai/windows/runner",
+        "${workspaceFolder}/mini_chatbox_ai/windows/flutter/ephemeral",
+        "${workspaceFolder}/mini_chatbox_ai/windows/flutter/ephemeral/cpp_client_wrapper/include"
+      ],
+      "defines": [
+        "_DEBUG",
+        "UNICODE",
+        "_UNICODE"
+      ],
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "windows-msvc-x64"
+    }
+  ],
+  "version": 4
+}

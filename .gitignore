@@ -1,0 +1,20 @@
+# Rust build artifacts
+rust_audio_engine/target/
+
+# Flutter build artifacts
+mini_chatbox_ai/build/
+mini_chatbox_ai/.dart_tool/
+mini_chatbox_ai/.flutter-plugins-dependencies
+mini_chatbox_ai/.pub-cache/
+mini_chatbox_ai/.pub/
+
+# Local/dynamic files
+mini_chatbox_ai/tinybert.onnx
+mini_chatbox_ai/test_model.onnx
+mini_chatbox_ai/rust_audio_engine.dll
+
+# IDEs and OS files
+.idea/
+.agent/
+.DS_Store
+*.log
