@@ -233,8 +233,12 @@ fn open_file(path: &str) -> Result<(Box<dyn FormatReader>, Box<dyn Decoder>, u32
 impl Player {
     pub fn new() -> Option<Self> {
         let host = cpal::default_host();
-        let device = host.default_output_device()?;
-        let supported_config = device.default_output_config().ok()?;
+        let device = host.default_output_device().or_else(|| {
+            host.output_devices().ok()?.next()
+        })?;
+        let supported_config = device.default_output_config().ok().or_else(|| {
+            device.supported_output_configs().ok()?.next()?.with_max_sample_rate().into()
+        })?;
         let sample_format = supported_config.sample_format();
         let config: cpal::StreamConfig = supported_config.into();
         let out_sample_rate = config.sample_rate.0;
@@ -886,17 +890,7 @@ pub extern "C" fn player_get_device_channels() -> i32 {
     -1
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn test_onnx_runtime() -> i32 {
-    if ort::init()
-        .with_name("rust_audio_engine")
-        .commit()
-    {
-        1
-    } else {
-        0
-    }
-}
+
 
 #[unsafe(no_mangle)]
 pub extern "C" fn player_set_preamp(player: *mut Player, db: f32) {
@@ -968,5 +962,24 @@ pub extern "C" fn player_set_limiter_ratio(player: *mut Player, ratio: f32) {
     if !player.is_null() {
         let p = unsafe { &*player };
         *p.control.limiter_ratio.lock().unwrap() = ratio;
+    }
+}
+
+#[cfg(target_os = "android")]
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn Java_com_example_music_1player_13_MainActivity_initAndroid(
+    env: jni::JNIEnv,
+    _class: jni::objects::JObject,
+    context: jni::objects::JObject,
+) {
+    if let Ok(vm) = env.get_java_vm() {
+        let vm_ptr = vm.get_java_vm_pointer() as *mut std::ffi::c_void;
+        if let Ok(context_ref) = env.new_global_ref(context) {
+            let context_raw = context_ref.as_obj().as_raw() as *mut std::ffi::c_void;
+            std::mem::forget(context_ref);
+            unsafe {
+                ndk_context::initialize_android_context(vm_ptr, context_raw);
+            }
+        }
     }
 }

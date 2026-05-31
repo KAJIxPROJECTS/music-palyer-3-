@@ -18,7 +18,7 @@ class Win32FilePicker {
     ofn.ref.nFilterIndex = 1;
     ofn.ref.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER;
     try {
-      if (GetOpenFileName(ofn)) {
+      if (GetOpenFileName(ofn) != 0) {
         return szFile.cast<Utf16>().toDartString();
       }
     } catch (_) {

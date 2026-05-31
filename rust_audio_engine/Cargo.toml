@@ -10,4 +10,7 @@ crate-type = ["cdylib", "lib"]
 cpal = "0.15"
 symphonia = { version = "0.5.4", features = ["all"] }
 ringbuf = "0.4"
-ort = "2.0.0-rc.12"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+ndk-context = "0.1.1"

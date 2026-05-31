@@ -5,18 +5,11 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:onnxruntime/onnxruntime.dart';
 import 'rust_audio_bindings.dart';
 import 'win32_file_picker.dart';
-import 'tinybert_classifier.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    OrtEnv.instance.init();
-  } catch (e) {
-    debugPrint("Failed to initialize ONNX Runtime: $e");
-  }
   runApp(const VibeSyncApp());
 }
 
@@ -55,8 +48,6 @@ class MainPlayerScreen extends StatefulWidget {
 class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProviderStateMixin {
   RustAudioPlayer? _player;
   bool _isPlayerInitialized = false;
-  final TinyBertClassifier _bertClassifier = TinyBertClassifier();
-  String? _lastAIQuestion;
   String? _cachedArtPath;
   Uint8List? _cachedArtBytes;
   final Map<String, List<String>> _customPlaylists = {};
@@ -100,15 +91,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
   Timer? _visualizerTimer;
   List<double> _waveHeights = List.generate(35, (_) => 2.0);
 
-  final List<Map<String, dynamic>> _chatMessages = [
-    {
-      'isUser': false,
-      'text': "Hi! I am your AI Music Assistant. Ask me to 'play', 'pause', 'stop', 'next', 'prev', 'loop', or 'status'!",
-      'time': DateTime.now()
-    }
-  ];
-  final TextEditingController _chatController = TextEditingController();
-  final ScrollController _chatScrollController = ScrollController();
 
   String _audioOutputDevice = 'System Default Device';
   double _equalizerBass = 0.5;
@@ -137,11 +119,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
       });
     } catch (_) {
     }
-    _bertClassifier.init().then((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
   }
 
   @override
@@ -150,9 +127,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
     _visualizerTimer?.cancel();
     _player?.dispose();
     _vinylController.dispose();
-    _chatController.dispose();
-    _chatScrollController.dispose();
-    _bertClassifier.dispose();
     super.dispose();
   }
 
@@ -806,209 +780,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
         );
       },
     );
-  }
-
-  void _handleSendChatMessage() {
-    final text = _chatController.text.trim();
-    if (text.isEmpty) return;
-    _chatController.clear();
-    setState(() {
-      _chatMessages.add({
-        'isUser': true,
-        'text': text,
-        'time': DateTime.now(),
-      });
-    });
-    _scrollChatToBottom();
-    _processChatAICommand(text);
-  }
-
-  void _scrollChatToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_chatScrollController.hasClients) {
-        _chatScrollController.animateTo(
-          _chatScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  void _addAIChatMessage(String text) {
-    setState(() {
-      _chatMessages.add({
-        'isUser': false,
-        'text': text,
-        'time': DateTime.now(),
-      });
-    });
-    _scrollChatToBottom();
-  }
-
-  bool _hasWord(String text, String word) {
-    return RegExp('\\b${RegExp.escape(word)}\\b', caseSensitive: false).hasMatch(text);
-  }
-
-  bool _hasAnyWord(String text, List<String> words) {
-    return words.any((w) => RegExp('\\b${RegExp.escape(w)}\\b', caseSensitive: false).hasMatch(text));
-  }
-
-  void _processChatAICommand(String input) {
-    final cmd = input.toLowerCase();
-    _bertClassifier.runInference(input).then((bertOutput) {
-      if (bertOutput != null && bertOutput.isNotEmpty) {
-        final length = bertOutput.length > 5 ? 5 : bertOutput.length;
-        final slice = bertOutput.sublist(0, length).map((e) => e.toStringAsFixed(3)).join(', ');
-        debugPrint("[TinyBERT Inference Output: $slice...]");
-      }
-      Timer(const Duration(milliseconds: 400), () {
-        final rand = math.Random();
-        if (_hasAnyWord(cmd, ['play', 'resume', 'start'])) {
-          if (_playlist.isEmpty) {
-            _addAIChatMessage("Queue is empty. Use the share button on player to scan and add tracks, or type 'scan'.");
-          } else {
-            _togglePlayPause();
-            if (!_isPlaying) {
-              _addAIChatMessage("Resumed audio playback.");
-            } else {
-              _addAIChatMessage("Playing track: ${p.basename(_playlist[_currentTrackIndex])}");
-            }
-          }
-        } else if (_hasAnyWord(cmd, ['pause', 'hold'])) {
-          if (_isPlaying) {
-            _player?.pause();
-            _addAIChatMessage("Audio playback paused.");
-          } else {
-            _addAIChatMessage("Playback is already paused.");
-          }
-        } else if (_hasWord(cmd, 'stop')) {
-          _player?.stop();
-          _addAIChatMessage("Playback stopped and timeline reset.");
-        } else if (_hasAnyWord(cmd, ['next', 'skip'])) {
-          if (_playlist.isNotEmpty) {
-            _nextTrack();
-            _addAIChatMessage("Skipped to next track.");
-          } else {
-            _addAIChatMessage("No tracks in queue.");
-          }
-        } else if (_hasAnyWord(cmd, ['prev', 'back'])) {
-          if (_playlist.isNotEmpty) {
-            _prevTrack();
-            _addAIChatMessage("Playing previous track.");
-          } else {
-            _addAIChatMessage("No tracks in queue.");
-          }
-        } else if (_hasAnyWord(cmd, ['loop', 'repeat'])) {
-          setState(() {
-            _isLooping = !_isLooping;
-          });
-          _addAIChatMessage(_isLooping ? "Loop mode enabled." : "Loop mode disabled.");
-        } else if (_hasAnyWord(cmd, ['scan', 'import'])) {
-          _addAIChatMessage("Scanning local storage for audio files...");
-          _scanForAudioFiles().then((files) {
-            if (files.isNotEmpty) {
-              setState(() {
-                for (final f in files) {
-                  if (!_playlist.contains(f)) _playlist.add(f);
-                }
-                if (_currentTrackIndex == -1) _currentTrackIndex = 0;
-              });
-              _addAIChatMessage("Discovered and imported ${files.length} tracks to queue.");
-            } else {
-              _addAIChatMessage("No audio files discovered.");
-            }
-          });
-        } else if (_hasAnyWord(cmd, ['status', 'info'])) {
-          if (_currentTrackIndex != -1) {
-            final title = p.basename(_playlist[_currentTrackIndex]);
-            final pos = _formatDuration(_positionMs);
-            final dur = _formatDuration(_durationMs);
-            final state = _isPlaying ? "Playing" : "Paused";
-            _addAIChatMessage("Status: $state\nTrack: $title\nProgress: $pos / $dur");
-          } else {
-            _addAIChatMessage("No track is currently loaded.");
-          }
-        } else if (_lastAIQuestion == 'mood' && _hasAnyWord(cmd, ['good', 'great', 'awesome', 'happy', 'fine', 'wonderful', 'cool', 'ok', 'okay', 'well'])) {
-          _lastAIQuestion = null;
-          final responses = [
-            "Awesome! Glad to hear that. Want to play some energetic tracks?",
-            "Fantastic! Let's keep the energy up. Should I play some music?",
-            "Wonderful! What would you like to listen to?"
-          ];
-          _addAIChatMessage(responses[rand.nextInt(responses.length)]);
-        } else if (_lastAIQuestion == 'mood' && _hasAnyWord(cmd, ['bad', 'sad', 'tired', 'stressed', 'angry', 'blue', 'down', 'exhausted'])) {
-          _lastAIQuestion = null;
-          final responses = [
-            "I'm sorry to hear that. Music always helps me unwind. Should I play something relaxing?",
-            "Aw, that's not good. Maybe a soft tune would help you feel better?",
-            "Sending positive vibes your way. Let me know if you want to listen to some chill tracks to relax."
-          ];
-          _addAIChatMessage(responses[rand.nextInt(responses.length)]);
-        } else if (cmd.contains('how are you') || cmd.contains("how's it going") || cmd.contains("how is it going")) {
-          _lastAIQuestion = 'mood';
-          final responses = [
-            "I'm doing great, thank you for asking! How are you doing today?",
-            "Systems are running perfectly! Ready for some music. How are you feeling?",
-            "I'm vibing! Thanks for checking in. How is your day going?"
-          ];
-          _addAIChatMessage(responses[rand.nextInt(responses.length)]);
-        } else if (_hasAnyWord(cmd, ['hello', 'hi', 'hey', 'sup', 'yo', 'greetings'])) {
-          _lastAIQuestion = 'mood';
-          final responses = [
-            "Hello! I am your AI Music Assistant. How are you doing today?",
-            "Hey there! Ready to listen to some music? How are you feeling?",
-            "Hi! How has your day been so far?",
-            "Greetings! How are you today?"
-          ];
-          _addAIChatMessage(responses[rand.nextInt(responses.length)]);
-        } else if (_hasAnyWord(cmd, ['joke', 'jokes', 'funny'])) {
-          final jokes = [
-            "Why did the computer go to the dentist? Because it had Bluetooth!",
-            "Why did the singer climb a ladder? To reach the high notes!",
-            "What makes music in your hair? A head-band!",
-            "What is an elf's favorite type of music? Wrap music!"
-          ];
-          _addAIChatMessage(jokes[rand.nextInt(jokes.length)]);
-        } else if (_hasAnyWord(cmd, ['favorite', 'favourite', 'like', 'love']) && _hasAnyWord(cmd, ['music', 'song', 'genre', 'artist', 'tune', 'sound'])) {
-          final responses = [
-            "I love all kinds of music, but I have a soft spot for synthwave and chill lo-fi. What about you?",
-            "I'm a big fan of electronic beats and acoustic melodies. Music makes the world go round!",
-            "I think instrumental tracks are amazing for focusing. What's your favorite genre?"
-          ];
-          _addAIChatMessage(responses[rand.nextInt(responses.length)]);
-        } else if (_hasAnyWord(cmd, ['recommend', 'suggestion', 'suggest', 'recommendation'])) {
-          if (_playlist.isEmpty) {
-            _addAIChatMessage("Your queue is currently empty, but I highly recommend importing some chill lo-fi tracks.");
-          } else {
-            final track = p.basename(_playlist[rand.nextInt(_playlist.length)]);
-            _addAIChatMessage("You should check out '$track' in your queue! Let me know if you want me to play it.");
-          }
-        } else if (_hasAnyWord(cmd, ['time', 'clock'])) {
-          final now = DateTime.now();
-          final minutes = now.minute.toString().padLeft(2, '0');
-          _addAIChatMessage("It is currently ${now.hour}:$minutes. The perfect time to sit back and listen to music!");
-        } else if (_hasAnyWord(cmd, ['weather', 'temperature', 'rain', 'sun'])) {
-          _addAIChatMessage("I don't have internet access to check the weather, but it's always a perfect day for music in here.");
-        } else if (_hasAnyWord(cmd, ['thank', 'thanks', 'thankyou'])) {
-          final responses = [
-            "You're very welcome!",
-            "Anytime! Let me know if you need more help.",
-            "My pleasure! Enjoy the music."
-          ];
-          _addAIChatMessage(responses[rand.nextInt(responses.length)]);
-        } else if (_hasAnyWord(cmd, ['bye', 'goodbye', 'seeya'])) {
-          _addAIChatMessage("Goodbye! Have a great day and keep vibing.");
-        } else {
-          final responses = [
-            "I'm here to chat, but I'm best at controlling your music! You can tell me to 'play', 'pause', 'stop', 'next', 'prev', 'loop', or 'scan'.",
-            "I didn't quite catch that. You can ask me to play a track, show status, tell a joke, or recommend a song!",
-            "I'm your music assistant. Try asking me to play, pause, scan for files, or check the player status!"
-          ];
-          _addAIChatMessage(responses[rand.nextInt(responses.length)]);
-        }
-      });
-    });
   }
 
   String _formatDuration(int ms) {
@@ -2346,103 +2117,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
     );
   }
 
-  Widget _buildChatView() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'AI Assistant',
-                style: TextStyle(color: Color(0xFF1E2824), fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                _bertClassifier.isReady
-                    ? 'TinyBERT Online'
-                    : (_bertClassifier.isDownloading ? 'TinyBERT Downloading...' : 'TinyBERT Offline'),
-                style: TextStyle(
-                  color: _bertClassifier.isReady ? Colors.green : Colors.orange,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              controller: _chatScrollController,
-              itemCount: _chatMessages.length,
-              itemBuilder: (context, index) {
-                final m = _chatMessages[index];
-                final isUser = m['isUser'] as bool;
-                return Align(
-                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isUser ? const Color(0xFF698075) : const Color(0xFFECEFF0),
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(14),
-                        topRight: const Radius.circular(14),
-                        bottomLeft: isUser ? const Radius.circular(14) : Radius.zero,
-                        bottomRight: isUser ? Radius.zero : const Radius.circular(14),
-                      ),
-                    ),
-                    child: Text(
-                      m['text'] as String,
-                      style: TextStyle(color: isUser ? Colors.white : const Color(0xFF1E2824), fontSize: 13),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _chatController,
-                    onSubmitted: (_) => _handleSendChatMessage(),
-                    style: const TextStyle(color: Color(0xFF1E2824), fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Type a music command...',
-                      hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-                      filled: true,
-                      fillColor: const Color(0xFFECEFF0),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: const Color(0xFF698075),
-                  radius: 18,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.send, color: Colors.white, size: 16),
-                    onPressed: _handleSendChatMessage,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPlayerView(double heightFactor) {
     return Stack(
       children: [
@@ -2750,8 +2424,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
     Widget cardContent;
     if (_navigationIndex == 0) {
       cardContent = _buildSettingsView();
-    } else if (_navigationIndex == 2) {
-      cardContent = _buildChatView();
     } else {
       cardContent = _buildPlayerView(heightFactor);
     }
@@ -2847,17 +2519,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                           ),
                           child: const Icon(Icons.home, color: Color(0xFFB5A296), size: 20),
                         ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.chat_bubble,
-                          color: _navigationIndex == 2 ? const Color(0xFF36453F) : Colors.white70,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _navigationIndex = 2;
-                          });
-                        },
                       ),
                     ],
                   ),
