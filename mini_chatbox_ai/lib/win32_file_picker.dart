@@ -10,11 +10,11 @@ class Win32FilePicker {
     szFile.asTypedList(bufferSize).fillRange(0, bufferSize, 0);
     ofn.ref.lStructSize = sizeOf<OPENFILENAME>();
     ofn.ref.hwndOwner = GetActiveWindow();
-    ofn.ref.lpstrFile = szFile.cast<Utf16>() as PWSTR;
+    ofn.ref.lpstrFile = szFile.cast<Utf16>();
     ofn.ref.nMaxFile = bufferSize;
     final filter = 'Audio Files (*.mp3;*.wav;*.ogg;*.flac)\x00*.mp3;*.wav;*.ogg;*.flac\x00All Files (*.*)\x00*.*\x00\x00';
     final filterPtr = filter.toNativeUtf16();
-    ofn.ref.lpstrFilter = filterPtr.cast<Utf16>() as PWSTR;
+    ofn.ref.lpstrFilter = filterPtr.cast<Utf16>();
     ofn.ref.nFilterIndex = 1;
     ofn.ref.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER;
     try {

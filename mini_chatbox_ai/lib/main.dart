@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'rust_audio_bindings.dart';
 import 'win32_file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,7 +28,6 @@ class VibeSyncApp extends StatelessWidget {
           primary: Color(0xFF698075),
           secondary: Color(0xFFB5A296),
           surface: Colors.white,
-          background: Color(0xFF36453F),
         ),
         textTheme: ThemeData.dark().textTheme.apply(
               fontFamily: 'Segoe UI',
@@ -47,7 +47,6 @@ class MainPlayerScreen extends StatefulWidget {
 
 class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProviderStateMixin {
   RustAudioPlayer? _player;
-  bool _isPlayerInitialized = false;
   String? _cachedArtPath;
   Uint8List? _cachedArtBytes;
   final Map<String, List<String>> _customPlaylists = {};
@@ -82,7 +81,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
   bool _isPlaying = false;
   int _positionMs = 0;
   int _durationMs = 0;
-  bool _isLiked = false;
   bool _isLooping = false;
 
   int _navigationIndex = 1;
@@ -93,8 +91,6 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
 
 
   String _audioOutputDevice = 'System Default Device';
-  double _equalizerBass = 0.5;
-  double _equalizerTreble = 0.5;
 
   late AnimationController _vinylController;
 
@@ -110,14 +106,26 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
 
     try {
       _player = RustAudioPlayer();
-      _isPlayerInitialized = true;
       _stateTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
         _updatePlaybackState();
       });
       _visualizerTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
         _updateVisualizer();
       });
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('Failed to initialize RustAudioPlayer: $e\n$st');
+    }
+    
+    _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    if (Platform.isAndroid) {
+      final statuses = await [
+        Permission.audio,
+        Permission.storage,
+      ].request();
+      debugPrint('Permissions request status: $statuses');
     }
   }
 
@@ -197,8 +205,33 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
   }
 
   void _loadAndPlay(int index) {
-    if (_player == null || index < 0 || index >= _playlist.length) return;
+    if (_player == null) {
+      debugPrint('Playback failed: RustAudioPlayer is not initialized');
+      return;
+    }
+    if (index < 0 || index >= _playlist.length) {
+      debugPrint('Playback failed: Invalid track index $index');
+      return;
+    }
     final path = _playlist[index];
+    final file = File(path);
+    if (!file.existsSync()) {
+      debugPrint('Playback failed: File does not exist at $path');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('File does not exist: ${p.basename(path)}')),
+      );
+      return;
+    }
+    try {
+      final access = file.openSync(mode: FileMode.read);
+      access.closeSync();
+    } catch (e) {
+      debugPrint('Playback failed: File is not accessible. Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('File not accessible: ${p.basename(path)}')),
+      );
+      return;
+    }
     _player!.stop();
     final res = _player!.load(path);
     if (res == 0) {
@@ -210,6 +243,8 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
         _positionMs = 0;
         _durationMs = 0;
       });
+    } else {
+      debugPrint('Playback failed: Rust player load returned error code $res');
     }
   }
 
@@ -471,7 +506,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
           title: const Text('Add to Playlist', style: TextStyle(color: Colors.white)),
           content: _customPlaylists.isEmpty
               ? const Text('No playlists created yet. Create a playlist first.', style: TextStyle(color: Colors.grey))
-              : Container(
+              : SizedBox(
                   width: double.maxFinite,
                   child: ListView.builder(
                     shrinkWrap: true,
@@ -749,7 +784,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Container(
+            return SizedBox(
               height: MediaQuery.of(context).size.height * 0.75,
               child: DefaultTabController(
                 length: 2,
@@ -1396,7 +1431,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                         SwitchListTile(
                           title: const Text('3D Surround Sound', style: TextStyle(color: Colors.white, fontSize: 14)),
                           value: _surroundSound,
-                          activeColor: const Color(0xFF698075),
+                          activeThumbColor: const Color(0xFF698075),
                           onChanged: (val) {
                             setSheetState(() {
                               _surroundSound = val;
@@ -1410,7 +1445,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                         SwitchListTile(
                           title: const Text('Limiter Switch', style: TextStyle(color: Colors.white, fontSize: 14)),
                           value: _limiterEnabled,
-                          activeColor: const Color(0xFF698075),
+                          activeThumbColor: const Color(0xFF698075),
                           onChanged: (val) {
                             setSheetState(() {
                               _limiterEnabled = val;
@@ -2067,7 +2102,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
           Text(title, style: const TextStyle(color: Color(0xFF1E2824), fontSize: 14, fontWeight: FontWeight.w600)),
           Switch(
             value: value,
-            activeColor: const Color(0xFF698075),
+            activeThumbColor: const Color(0xFF698075),
             onChanged: onChanged,
           ),
         ],
@@ -2342,7 +2377,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                                   width: 2,
                                   height: _waveHeights[index],
                                   decoration: BoxDecoration(
-                                    color: isActive ? Colors.black : Colors.black.withOpacity(0.4),
+                                    color: isActive ? Colors.black : Colors.black.withValues(alpha: 0.4),
                                     borderRadius: BorderRadius.circular(1),
                                   ),
                                 );
@@ -2438,7 +2473,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
             ? null
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   blurRadius: 30,
                   spreadRadius: 5,
                 )
@@ -2456,7 +2491,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                 height: 220,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFB5A296).withOpacity(0.6),
+                  color: const Color(0xFFB5A296).withValues(alpha: 0.6),
                 ),
               ),
             ),
@@ -2467,7 +2502,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                 width: 320,
                 height: 180,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF222B27).withOpacity(0.5),
+                  color: const Color(0xFF222B27).withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(90),
                 ),
               ),
@@ -2514,7 +2549,7 @@ class _MainPlayerScreenState extends State<MainPlayerScreen> with TickerProvider
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                           decoration: BoxDecoration(
-                            color: _navigationIndex == 1 ? const Color(0xFF36453F) : const Color(0xFF36453F).withOpacity(0.5),
+                            color: _navigationIndex == 1 ? const Color(0xFF36453F) : const Color(0xFF36453F).withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.home, color: Color(0xFFB5A296), size: 20),

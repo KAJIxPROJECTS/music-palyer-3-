@@ -15,6 +15,32 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
+#[cfg(target_os = "android")]
+#[link(name = "log")]
+unsafe extern "C" {
+    fn __android_log_print(
+        prio: std::os::raw::c_int,
+        tag: *const std::os::raw::c_char,
+        fmt: *const std::os::raw::c_char,
+        ...
+    ) -> std::os::raw::c_int;
+}
+
+#[cfg(target_os = "android")]
+fn log_android(prio: i32, msg: &str) {
+    use std::ffi::CString;
+    let tag = CString::new("RustAudioEngine").unwrap();
+    let message = CString::new(msg).unwrap();
+    unsafe {
+        __android_log_print(prio, tag.as_ptr(), message.as_ptr());
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn log_android(_prio: i32, msg: &str) {
+    eprintln!("{}", msg);
+}
+
 #[derive(Clone, Copy)]
 struct BiquadFilter {
     b0: f32, b1: f32, b2: f32,
@@ -233,12 +259,25 @@ fn open_file(path: &str) -> Result<(Box<dyn FormatReader>, Box<dyn Decoder>, u32
 impl Player {
     pub fn new() -> Option<Self> {
         let host = cpal::default_host();
-        let device = host.default_output_device().or_else(|| {
+        let device = match host.default_output_device().or_else(|| {
             host.output_devices().ok()?.next()
-        })?;
-        let supported_config = device.default_output_config().ok().or_else(|| {
-            device.supported_output_configs().ok()?.next()?.with_max_sample_rate().into()
-        })?;
+        }) {
+            Some(d) => d,
+            None => {
+                log_android(6, "Failed to get default output device");
+                return None;
+            }
+        };
+        let supported_config = match device.default_output_config().ok().or_else(|| {
+            let mut configs = device.supported_output_configs().ok()?;
+            configs.next().map(|c| c.with_max_sample_rate().into())
+        }) {
+            Some(sc) => sc,
+            None => {
+                log_android(6, "Failed to get supported output config");
+                return None;
+            }
+        };
         let sample_format = supported_config.sample_format();
         let config: cpal::StreamConfig = supported_config.into();
         let out_sample_rate = config.sample_rate.0;
@@ -279,7 +318,7 @@ impl Player {
                 let mut right_filters = vec![BiquadFilter::new(); 10];
                 let freqs = [31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
                 let mut reverb = Reverb::new(out_sample_rate);
-                device.build_output_stream(
+                match device.build_output_stream(
                     &config,
                     move |data: &mut [f32], _| {
                         let epoch = control_cb.buffer_epoch.load(Ordering::Relaxed);
@@ -358,7 +397,13 @@ impl Player {
                     },
                     err_fn,
                     None
-                ).ok()?
+                ) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log_android(6, &format!("Failed to build F32 output stream: {:?}", e));
+                        return None;
+                    }
+                }
             }
             cpal::SampleFormat::I16 => {
                 let control_cb = control_cb.clone();
@@ -366,7 +411,7 @@ impl Player {
                 let mut right_filters = vec![BiquadFilter::new(); 10];
                 let freqs = [31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
                 let mut reverb = Reverb::new(out_sample_rate);
-                device.build_output_stream(
+                match device.build_output_stream(
                     &config,
                     move |data: &mut [i16], _| {
                         let epoch = control_cb.buffer_epoch.load(Ordering::Relaxed);
@@ -445,7 +490,13 @@ impl Player {
                     },
                     err_fn,
                     None
-                ).ok()?
+                ) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log_android(6, &format!("Failed to build I16 output stream: {:?}", e));
+                        return None;
+                    }
+                }
             }
             cpal::SampleFormat::U16 => {
                 let control_cb = control_cb.clone();
@@ -453,7 +504,7 @@ impl Player {
                 let mut right_filters = vec![BiquadFilter::new(); 10];
                 let freqs = [31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
                 let mut reverb = Reverb::new(out_sample_rate);
-                device.build_output_stream(
+                match device.build_output_stream(
                     &config,
                     move |data: &mut [u16], _| {
                         let epoch = control_cb.buffer_epoch.load(Ordering::Relaxed);
@@ -532,12 +583,24 @@ impl Player {
                     },
                     err_fn,
                     None
-                ).ok()?
+                ) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log_android(6, &format!("Failed to build U16 output stream: {:?}", e));
+                        return None;
+                    }
+                }
             }
-            _ => return None,
+            _ => {
+                log_android(6, &format!("Unsupported sample format: {:?}", sample_format));
+                return None;
+            }
         };
 
-        stream.play().ok()?;
+        if let Err(e) = stream.play() {
+            log_android(6, &format!("Failed to start output stream: {:?}", e));
+            return None;
+        }
 
         let stop_signal_thread = stop_signal.clone();
         let control_thread = control.clone();
@@ -553,25 +616,30 @@ impl Player {
                         guard.take()
                     };
                     if let Some(p) = path {
-                        if let Ok((format_reader, decoder, track_id, in_sample_rate, in_channels, duration_ms)) = open_file(&p) {
-                            state = Some(DecoderState {
-                                format_reader,
-                                decoder,
-                                track_id,
-                                in_sample_rate,
-                                in_channels,
-                                input_buffer: Vec::new(),
-                                resample_fraction: 0.0,
-                            });
-                            control_thread.duration_ms.store(duration_ms as u32, Ordering::Relaxed);
-                            control_thread.position_ms.store(0, Ordering::Relaxed);
-                            control_thread.samples_played.store(0, Ordering::Relaxed);
-                            let epoch = control_thread.buffer_epoch.fetch_add(1, Ordering::Relaxed) + 1;
-                            for _ in 0..50 {
-                                if control_thread.clear_acknowledged.load(Ordering::Relaxed) == epoch {
-                                    break;
+                        match open_file(&p) {
+                            Ok((format_reader, decoder, track_id, in_sample_rate, in_channels, duration_ms)) => {
+                                state = Some(DecoderState {
+                                    format_reader,
+                                    decoder,
+                                    track_id,
+                                    in_sample_rate,
+                                    in_channels,
+                                    input_buffer: Vec::new(),
+                                    resample_fraction: 0.0,
+                                });
+                                control_thread.duration_ms.store(duration_ms as u32, Ordering::Relaxed);
+                                control_thread.position_ms.store(0, Ordering::Relaxed);
+                                control_thread.samples_played.store(0, Ordering::Relaxed);
+                                let epoch = control_thread.buffer_epoch.fetch_add(1, Ordering::Relaxed) + 1;
+                                for _ in 0..50 {
+                                    if control_thread.clear_acknowledged.load(Ordering::Relaxed) == epoch {
+                                        break;
+                                    }
+                                    thread::sleep(Duration::from_millis(1));
                                 }
-                                thread::sleep(Duration::from_millis(1));
+                            }
+                            Err(e) => {
+                                log_android(6, &format!("Failed to open file {}: {:?}", p, e));
                             }
                         }
                     }

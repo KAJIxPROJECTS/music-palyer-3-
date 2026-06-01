@@ -30,7 +30,9 @@ if (!(Test-Path $DebugDir)) {
 }
 Copy-Item "rust_audio_engine/target/release/rust_audio_engine.dll" "$DebugDir/" -Force
 
+$WorkspaceRoot = Get-Location
 # 4. Start Flutter Application
+$env:Path = "$WorkspaceRoot;$env:Path"
 Write-Host "=== 3. Launching Flutter Application ===" -ForegroundColor Cyan
 Set-Location -Path $AppFolder
 flutter run -d windows
